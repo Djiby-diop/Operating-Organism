@@ -222,3 +222,4 @@ tools/_toolchains/
 
 # Local toolchains (downloaded, not tracked)
 tools/_toolchains/
+djib/llama.cpp  
