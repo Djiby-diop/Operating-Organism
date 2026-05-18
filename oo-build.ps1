@@ -52,6 +52,15 @@ function Fail($label, $detail = "") {
     Log "  ❌ $label $detail" "Red"
 }
 
+function ToWsl($winPath) {
+    # Convert Windows path to WSL /mnt/... path without calling wslpath
+    $p = $winPath.Replace("\", "/")
+    if ($p -match '^([A-Za-z]):(.*)') {
+        return "/mnt/" + $Matches[1].ToLower() + $Matches[2]
+    }
+    return $p
+}
+
 function Build-Organ($name) {
     $path = Join-Path $ROOT $name
     if (-not (Test-Path $path)) { Fail "$name" "NOT FOUND"; return }
@@ -71,10 +80,10 @@ function Build-Organ($name) {
                 if ($has_gcc) {
                     $result = & gcc -c -ffreestanding -mno-red-zone -I"$incl" -I"$ROOT\united-baremetal\include" "$($f.FullName)" -o "$obj" 2>&1
                 } elseif ($has_wsl) {
-                    $linuxPath = (wsl wslpath "$($f.FullName)").Trim()
-                    $linuxIncl = (wsl wslpath "$incl").Trim()
-                    $linuxObj  = (wsl wslpath "$obj").Trim()
-                    $linuxUbus = (wsl wslpath "$ROOT\united-baremetal\include").Trim()
+                    $linuxPath = ToWsl $f.FullName
+                    $linuxIncl = ToWsl $incl
+                    $linuxObj  = ToWsl $obj
+                    $linuxUbus = ToWsl "$ROOT\united-baremetal\include"
                     $result = wsl gcc -c -ffreestanding -mno-red-zone -I"$linuxIncl" -I"$linuxUbus" "$linuxPath" -o "$linuxObj" 2>&1
                 } else {
                     Log "  ⚠️  $name — gcc not found (install WSL+gcc or mingw). Skipping compile." "Yellow"
@@ -92,7 +101,7 @@ function Build-Organ($name) {
     # Has Makefile — try WSL make
     $has_wsl = Get-Command "wsl" -ErrorAction SilentlyContinue
     if ($has_wsl) {
-        $linuxPath = (wsl wslpath "$path").Trim()
+        $linuxPath = ToWsl $path
         $result = wsl bash -c "cd '$linuxPath' && make 2>&1" 2>&1
         if ($LASTEXITCODE -eq 0) { Pass $name }
         else {
@@ -212,22 +221,33 @@ if ($Smoke -and -not $SkipQemu) {
     $qemu = Get-Command "qemu-system-x86_64" -ErrorAction SilentlyContinue
     if (-not $qemu) { Fail "QEMU not found in PATH"; }
     else {
-        $efi_img = "$ROOT\KERNEL.EFI"
-        if (-not (Test-Path $efi_img)) { $efi_img = "$ROOT\llm-baremetal\KERNEL.EFI" }
-        if (Test-Path $efi_img) {
-            Log "  🚀 Launching QEMU (5s timeout smoke test)..." "Cyan"
-            $proc = Start-Process qemu-system-x86_64 -ArgumentList `
-                "-machine q35 -m 512 -bios OVMF.fd -drive format=raw,file=$efi_img -nographic -serial stdio" `
-                -PassThru -WindowStyle Hidden
-            Start-Sleep 5
-            if (-not $proc.HasExited) {
-                Stop-Process -Id $proc.Id -Force
-                Pass "QEMU smoke (booted, no crash in 5s)"
-            } else {
-                Fail "QEMU crashed (exit $($proc.ExitCode))"
-            }
+        $ovmf_code = "C:\Program Files\qemu\share\edk2-x86_64-code.fd"
+        $ovmf_vars_src = "C:\Program Files\qemu\share\edk2-i386-vars.fd"
+        $ovmf_vars_tmp = "$env:TEMP\oo-smoke-vars.fd"
+        $boot_img = "$ROOT\llm-baremetal\llm-baremetal-boot.img"
+
+        if (-not (Test-Path $ovmf_code)) { Fail "QEMU: OVMF firmware not found at $ovmf_code"; return }
+        if (-not (Test-Path $boot_img))  { Fail "QEMU: Boot image not found at $boot_img"; return }
+
+        Copy-Item $ovmf_vars_src $ovmf_vars_tmp -Force
+        Log "  Launching QEMU smoke test (5s timeout)..." "Cyan"
+        $proc = Start-Process "qemu-system-x86_64" -ArgumentList @(
+            "-machine", "q35,accel=tcg",
+            "-cpu", "max",
+            "-m", "1024",
+            "-drive", "if=pflash,format=raw,readonly=on,file=$ovmf_code",
+            "-drive", "if=pflash,format=raw,file=$ovmf_vars_tmp",
+            "-drive", "format=raw,file=$boot_img",
+            "-serial", "file:$env:TEMP\oo-smoke-uart.txt",
+            "-display", "none",
+            "-monitor", "none"
+        ) -PassThru -NoNewWindow
+        $ended = $proc.WaitForExit(5000)
+        if (-not $ended) {
+            $proc.Kill()
+            Pass "QEMU smoke (booted, no crash in 5s)"
         } else {
-            Fail "QEMU: no EFI image to test"
+            Fail "QEMU crashed (exit $($proc.ExitCode))"
         }
     }
 }

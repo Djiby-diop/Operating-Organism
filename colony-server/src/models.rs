@@ -99,6 +99,74 @@ pub struct Directive {
     pub content: serde_json::Value,
 }
 
+/// Local node identity inside the mesh
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeProfile {
+    pub node_id: String,
+    pub role: String,
+    pub bind_addr: String,
+    pub first_seen: DateTime<Utc>,
+    pub last_seen: DateTime<Utc>,
+}
+
+/// Peer registration payload
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeerRegistration {
+    pub peer_id: String,
+    pub address: String,
+    pub role: String,
+}
+
+/// Mesh gossip envelope sent from one colony node to another
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GossipEnvelope {
+    pub gossip_id: String,
+    pub ttl_hops: u8,
+    pub from: PeerRegistration,
+    pub observed_threats: Vec<String>,
+    pub observed_organisms: usize,
+    pub sent_at: DateTime<Utc>,
+    pub hmac_sha256: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GossipAck {
+    pub status: String,
+    pub local_node_id: String,
+    pub gossip_id: String,
+    pub duplicate: bool,
+    pub relayed: bool,
+    pub ttl_hops_remaining: u8,
+    pub known_peer_count: usize,
+    pub received_at: DateTime<Utc>,
+}
+
+/// Persisted peer record
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MeshPeer {
+    pub peer_id: String,
+    pub address: String,
+    pub role: String,
+    pub first_seen: DateTime<Utc>,
+    pub last_seen: DateTime<Utc>,
+    pub heartbeat_count: usize,
+}
+
+/// Registry of known peers
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MeshRegistry {
+    pub peers: HashMap<String, MeshPeer>,
+}
+
+/// Mesh-wide status view
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MeshState {
+    pub local_node: NodeProfile,
+    pub peer_count: usize,
+    pub peers: Vec<MeshPeer>,
+    pub colony_status: ColonyStatus,
+}
+
 /// Live organisms registry
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrganismRegistry {

@@ -54,3 +54,10 @@ swarm_temp/
 *.img
 *.iso
 ovmf-vars-temp.fd
+
+# Temp colony test data
+colony-server/temp_node*/
+
+# Project images/media
+picture oo/
+

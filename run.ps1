@@ -33,9 +33,13 @@ param(
 )
 
 # Root convenience wrapper: allows running from repo root.
-$script = [System.IO.Path]::Combine($PSScriptRoot, 'llm-baremetal', 'run.ps1')
+$script = [System.IO.Path]::Combine($PSScriptRoot, 'llm-baremetal', 'run-qemu.ps1')
 if (-not (Test-Path $script)) {
-  throw "llm-baremetal/run.ps1 not found at: $script"
+  # Fallback to oo-run.ps1
+  $script = [System.IO.Path]::Combine($PSScriptRoot, 'oo-run.ps1')
+}
+if (-not (Test-Path $script)) {
+  throw "No QEMU launcher found. Expected llm-baremetal/run-qemu.ps1 or oo-run.ps1"
 }
 
 & $script @PSBoundParameters

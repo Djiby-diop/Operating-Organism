@@ -1,40 +1,66 @@
-use crate::models::{Heartbeat, ThreatRegistry, OrganismRegistry, LiveOrganism};
+use crate::models::{
+    GossipEnvelope,
+    Heartbeat,
+    LiveOrganism,
+    MeshPeer,
+    MeshRegistry,
+    MeshState,
+    NodeProfile,
+    OrganismRegistry,
+    PeerRegistration,
+    ThreatRegistry,
+};
 use anyhow::{Context, Result};
 use chrono::Utc;
 use serde_json::{json, Value};
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use uuid::Uuid;
 
 const FOSSIL_DIR: &str = "fossil";
 const ORGANISMS_DIR: &str = "fossil/organisms";
+const MESH_DIR: &str = "fossil/mesh";
 const THREATS_FILE: &str = "fossil/threats/threat_signatures.jsonl";
 const MUTATIONS_FILE: &str = "fossil/mutations/fitness_archive.jsonl";
 const LIVE_ORGANISMS_FILE: &str = "fossil/organisms.json";
+const NODE_PROFILE_FILE: &str = "fossil/node.json";
+const PEERS_FILE: &str = "fossil/mesh/peers.json";
+const GOSSIP_FILE: &str = "fossil/mesh/gossip.ndjson";
 const THREATS_LIVE_FILE: &str = "fossil/live/threats.json";
 const MUTATIONS_LIVE_FILE: &str = "fossil/live/mutations.json";
 
 pub struct Storage {
-    base_dir: String,
+    base_dir: PathBuf,
 }
 
 impl Storage {
     pub fn new(base_dir: &str) -> Result<Self> {
-        // Ensure directory structure exists
-        fs::create_dir_all(ORGANISMS_DIR)?;
-        fs::create_dir_all("fossil/live")?;
-        fs::create_dir_all("fossil/threats")?;
-        fs::create_dir_all("fossil/mutations")?;
+        let storage = Storage {
+            base_dir: PathBuf::from(base_dir),
+        };
 
-        Ok(Storage {
-            base_dir: base_dir.to_string(),
-        })
+        storage.ensure_directories()?;
+        Ok(storage)
+    }
+
+    fn path(&self, relative: &str) -> PathBuf {
+        self.base_dir.join(relative)
+    }
+
+    fn ensure_directories(&self) -> Result<()> {
+        fs::create_dir_all(self.path(ORGANISMS_DIR))?;
+        fs::create_dir_all(self.path(MESH_DIR))?;
+        fs::create_dir_all(self.path("fossil/live"))?;
+        fs::create_dir_all(self.path("fossil/threats"))?;
+        fs::create_dir_all(self.path("fossil/mutations"))?;
+        Ok(())
     }
 
     /// Store a heartbeat from an OO organism
     pub fn store_heartbeat(&self, heartbeat: &Heartbeat) -> Result<()> {
         // 1. Append to organism's fossil record
-        let org_file = format!("{}/{}.ndjson", ORGANISMS_DIR, heartbeat.organism_id);
+        let org_file = self.path(&format!("{}/{}.ndjson", ORGANISMS_DIR, heartbeat.organism_id));
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
@@ -76,13 +102,169 @@ impl Storage {
         Ok(())
     }
 
+    /// Create or update the local node profile on disk.
+    pub fn get_or_create_node_profile(&self, bind_addr: &str) -> Result<NodeProfile> {
+        let path = self.path(NODE_PROFILE_FILE);
+        if path.exists() {
+            let mut profile: NodeProfile = self.read_json_path(&path)?;
+            profile.bind_addr = bind_addr.to_string();
+            profile.last_seen = Utc::now();
+            self.write_json_path(&path, &profile)?;
+            return Ok(profile);
+        }
+
+        let profile = NodeProfile {
+            node_id: std::env::var("COLONY_NODE_ID").unwrap_or_else(|_| Uuid::new_v4().to_string()),
+            role: std::env::var("COLONY_ROLE").unwrap_or_else(|_| "relay".to_string()),
+            bind_addr: bind_addr.to_string(),
+            first_seen: Utc::now(),
+            last_seen: Utc::now(),
+        };
+
+        self.write_json_path(&path, &profile)?;
+        Ok(profile)
+    }
+
+    /// Register a peer in the mesh registry.
+    pub fn register_peer(&self, peer: &PeerRegistration) -> Result<MeshPeer> {
+        let mut registry = self.get_mesh_registry()?;
+        let now = Utc::now();
+
+        let record = registry
+            .peers
+            .entry(peer.peer_id.clone())
+            .and_modify(|existing| {
+                existing.address = peer.address.clone();
+                existing.role = peer.role.clone();
+                existing.last_seen = now;
+                existing.heartbeat_count += 1;
+            })
+            .or_insert_with(|| MeshPeer {
+                peer_id: peer.peer_id.clone(),
+                address: peer.address.clone(),
+                role: peer.role.clone(),
+                first_seen: now,
+                last_seen: now,
+                heartbeat_count: 1,
+            })
+            .clone();
+
+        self.write_json(PEERS_FILE, &registry)?;
+        Ok(record)
+    }
+
+    pub fn register_bootstrap_peers(&self, peers: &[PeerRegistration], local_node_id: &str) -> Result<usize> {
+        let mut applied = 0usize;
+
+        for peer in peers {
+            if peer.peer_id == local_node_id {
+                continue;
+            }
+
+            self.register_peer(peer)?;
+            applied += 1;
+        }
+
+        Ok(applied)
+    }
+
+    pub fn store_gossip(&self, gossip: &GossipEnvelope) -> Result<MeshPeer> {
+        let registered = self.register_peer(&gossip.from)?;
+
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.path(GOSSIP_FILE))?;
+
+        writeln!(
+            file,
+            "{}",
+            serde_json::to_string(&json!({
+                "gossip_id": gossip.gossip_id,
+                "from": gossip.from,
+                "observed_threats": gossip.observed_threats,
+                "observed_organisms": gossip.observed_organisms,
+                "sent_at": gossip.sent_at,
+                "received_at": Utc::now(),
+            }))?
+        )?;
+
+        Ok(registered)
+    }
+
+    /// Load recent gossip IDs from disk to populate deduplication cache on startup.
+    pub fn load_seen_gossip(&self, dedup_window_s: i64) -> Result<std::collections::HashMap<String, i64>> {
+        let mut seen = std::collections::HashMap::new();
+        let path = self.path(GOSSIP_FILE);
+        if !path.exists() {
+            return Ok(seen);
+        }
+
+        let file = std::fs::File::open(path)?;
+        let reader = std::io::BufReader::new(file);
+        let now = Utc::now().timestamp();
+
+        for line in reader.lines() {
+            let line = line?;
+            if let Ok(record) = serde_json::from_str::<serde_json::Value>(&line) {
+                if let (Some(id), Some(received_at_str)) = (
+                    record.get("gossip_id").and_then(|v| v.as_str()),
+                    record.get("received_at").and_then(|v| v.as_str())
+                ) {
+                    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(received_at_str) {
+                        let ts = dt.timestamp();
+                        if now - ts <= dedup_window_s {
+                            seen.insert(id.to_string(), ts);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(seen)
+    }
+
+    pub fn get_mesh_registry(&self) -> Result<MeshRegistry> {
+        let mut registry: MeshRegistry = self.read_json(PEERS_FILE).unwrap_or_else(|_| {
+            MeshRegistry {
+                peers: Default::default(),
+            }
+        });
+
+        // Eviction policy: remove peers not seen for 1 hour
+        let now = Utc::now();
+        let timeout_s = 3600; // 1 hour
+        let initial_len = registry.peers.len();
+
+        registry.peers.retain(|_, peer| {
+            (now - peer.last_seen).num_seconds() <= timeout_s
+        });
+
+        if registry.peers.len() < initial_len {
+            self.write_json(PEERS_FILE, &registry)?;
+        }
+
+        Ok(registry)
+    }
+
+    pub fn get_mesh_state(&self, local_node: &NodeProfile) -> Result<MeshState> {
+        let registry = self.get_mesh_registry()?;
+        let colony_status = self.get_colony_status()?;
+
+        Ok(MeshState {
+            local_node: local_node.clone(),
+            peer_count: registry.peers.len(),
+            peers: registry.peers.values().cloned().collect(),
+            colony_status,
+        })
+    }
+
     fn process_threats(&self, heartbeat: &Heartbeat) -> Result<()> {
         // Append each threat to fossil record
         for threat in &heartbeat.immune_signals {
             let mut file = OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(THREATS_FILE)?;
+                .open(self.path(THREATS_FILE))?;
 
             let record = json!({
                 "threat_id": threat.threat_id,
@@ -105,7 +287,7 @@ impl Storage {
             let mut file = OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(MUTATIONS_FILE)?;
+                .open(self.path(MUTATIONS_FILE))?;
 
             let record = json!({
                 "kind": mutation.kind,
@@ -121,23 +303,32 @@ impl Storage {
         Ok(())
     }
 
-    /// Get aggregated threat signatures
+    /// Get aggregated threat signatures with majority-vote conflict resolution for severity
     pub fn get_threat_registry(&self) -> Result<ThreatRegistry> {
         let mut registry = ThreatRegistry {
             threats: Default::default(),
         };
 
-        if !Path::new(THREATS_FILE).exists() {
+        if !self.path(THREATS_FILE).exists() {
             return Ok(registry);
         }
 
-        let file = std::fs::File::open(THREATS_FILE)?;
+        let file = std::fs::File::open(self.path(THREATS_FILE))?;
         let reader = BufReader::new(file);
+
+        // Local state for conflict resolution (threat_id -> severity -> votes)
+        let mut severity_votes: std::collections::HashMap<String, std::collections::HashMap<String, usize>> = std::collections::HashMap::new();
 
         for line in reader.lines() {
             let line = line?;
             if let Ok(record) = serde_json::from_str::<Value>(&line) {
-                if let Some(threat_id) = record.get("threat_id").and_then(|v| v.as_str()) {
+                if let (Some(threat_id), Some(severity)) = (
+                    record.get("threat_id").and_then(|v| v.as_str()),
+                    record.get("severity").and_then(|v| v.as_str())
+                ) {
+                    let votes = severity_votes.entry(threat_id.to_string()).or_default();
+                    *votes.entry(severity.to_string()).or_default() += 1;
+
                     registry
                         .threats
                         .entry(threat_id.to_string())
@@ -158,11 +349,7 @@ impl Storage {
                         .or_insert_with(|| {
                             crate::models::AggregatedThreat {
                                 threat_id: threat_id.to_string(),
-                                severity: record
-                                    .get("severity")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("unknown")
-                                    .to_string(),
+                                severity: severity.to_string(), // Initial guess
                                 discovered_by: record
                                     .get("discovered_by")
                                     .and_then(|v| v.as_str())
@@ -186,6 +373,15 @@ impl Storage {
             }
         }
 
+        // Resolve severity conflicts by majority vote
+        for (threat_id, votes) in severity_votes {
+            if let Some(t) = registry.threats.get_mut(&threat_id) {
+                if let Some((best_severity, _)) = votes.into_iter().max_by_key(|&(_, count)| count) {
+                    t.severity = best_severity;
+                }
+            }
+        }
+
         Ok(registry)
     }
 
@@ -200,12 +396,23 @@ impl Storage {
 
     /// Read JSON file
     fn read_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T> {
+        let content = fs::read_to_string(self.path(path))?;
+        serde_json::from_str(&content).context("Failed to parse JSON")
+    }
+
+    fn read_json_path<T: serde::de::DeserializeOwned>(&self, path: &Path) -> Result<T> {
         let content = fs::read_to_string(path)?;
         serde_json::from_str(&content).context("Failed to parse JSON")
     }
 
     /// Write JSON file
     fn write_json<T: serde::Serialize>(&self, path: &str, data: &T) -> Result<()> {
+        let json = serde_json::to_string_pretty(data)?;
+        fs::write(self.path(path), json)?;
+        Ok(())
+    }
+
+    fn write_json_path<T: serde::Serialize>(&self, path: &Path, data: &T) -> Result<()> {
         let json = serde_json::to_string_pretty(data)?;
         fs::write(path, json)?;
         Ok(())
@@ -251,7 +458,7 @@ impl Storage {
     fn compute_fossil_size(&self) -> Result<f64> {
         let mut total_size = 0u64;
 
-        for entry in walkdir::WalkDir::new(FOSSIL_DIR)
+        for entry in walkdir::WalkDir::new(self.path(FOSSIL_DIR))
             .into_iter()
             .filter_map(|e| e.ok())
         {
