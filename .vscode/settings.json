@@ -1,0 +1,29 @@
+{
+    "cmake.sourceDirectory": "C:/Users/djibi/Desktop/baremetal/llama.cpp/examples/embedding",
+    "chat.tools.terminal.autoApprove": {
+        "/^powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\djibi\\\\Desktop\\\\baremetal\\\\llm-baremetal\\\\run-qemu\\.ps1\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^powershell\\.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\djibi\\\\Desktop\\\\baremetal\\\\llm-baremetal\\\\test-qemu-autorun\\.ps1\" -Accel tcg -TimeoutSec 600 -SkipInspect$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^git config core\\.fileMode false ; git checkout -- \\. ; git status --porcelain$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "Test-Path": true,
+        "Get-Command": true,
+        "&": true,
+        "New-Object": true,
+        "/^powershell -NoProfile -ExecutionPolicy Bypass -Command \"\\. \\.\\\\llm-baremetal\\\\tools\\\\fat83\\.ps1; 'ok'\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^pwsh -NoProfile -NoLogo -Command 'Set-Location -LiteralPath \"\\$env:USERPROFILE\\\\OneDrive\\\\Bureau\\\\baremetal\\\\llm-baremetal\"; \\$f=\"README\\.md\"; \\$t=Get-Content -LiteralPath \\$f -Raw -Encoding UTF8; \\$line=1; \\$col=0; \\$found=0; foreach\\(\\$ch in \\$t\\.ToCharArray\\(\\)\\)\\{ if\\(\\$ch -eq \"`n\"\\)\\{ \\$line\\+\\+; \\$col=0; continue \\}; \\$col\\+\\+; if\\(\\[int\\]\\[char\\]\\$ch -gt 127\\)\\{ \"\\{0\\}:\\{1\\}:\\{2\\} U\\+\\{3:X4\\}\" -f \\$f,\\$line,\\$col,\\(\\[int\\]\\[char\\]\\$ch\\); \\$found\\+\\+; if\\(\\$found -ge 30\\)\\{ break \\} \\} \\}; if\\(\\$found -eq 0\\)\\{ \"\\$f: OK\" \\}'$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

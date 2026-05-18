@@ -1,0 +1,46 @@
+{
+  "folders": [
+    {
+      "name": "🧠 llm-baremetal (source)",
+      "path": "./llm-baremetal"
+    },
+    {
+      "name": "🖥️ oo-host (source)",
+      "path": "./oo-host"
+    },
+    {
+      "name": "🌱 Operating-Organism (source)",
+      "path": "./Operating-Organism"
+    },
+    {
+      "name": "⚙️ oo-system (source)",
+      "path": "./oo-system"
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.git": true,
+      "**/build": true,
+      "**/target/debug": true,
+      "**/__pycache__": true
+    },
+    "editor.formatOnSave": false,
+    "C_Cpp.default.includePath": [
+      "${workspaceFolder}",
+      "/usr/include/efi",
+      "/usr/include/efi/x86_64"
+    ],
+    "files.associations": {
+      "*.h": "c",
+      "Makefile.*": "makefile"
+    },
+    "powershell.cwd": "🧠 llm-baremetal (source)"
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-vscode.cpptools",
+      "rust-lang.rust-analyzer",
+      "github.copilot"
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+{"patch_id":"77184495-f1bc-4584-910b-2ca31358abac","kind":"config","target":"llm-baremetal/repl.cfg","key":"soma_adapter_version","value":"20260503.1114","old_value":null,"reason":"Autonomous evolution cycle complete","confidence":0.9800,"status":"proposed","proposed_at":1777806883,"applied_at":null,"tags":[]}

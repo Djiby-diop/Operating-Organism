@@ -1,0 +1,50 @@
+name: baremetal-structure-smoke
+
+on:
+  push:
+    paths:
+      - "BAREMETAL_STANDARD.md"
+      - "tools/scripts/smoke_baremetal.ps1"
+      - "*-baremetal/**"
+      - ".github/workflows/baremetal-structure-smoke.yml"
+  pull_request:
+    paths:
+      - "BAREMETAL_STANDARD.md"
+      - "tools/scripts/smoke_baremetal.ps1"
+      - "*-baremetal/**"
+      - ".github/workflows/baremetal-structure-smoke.yml"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compatibility smoke (blocking)
+        shell: pwsh
+        run: ./tools/scripts/smoke_baremetal.ps1 -FailOnMissing
+
+      - name: Strict smoke gate (dedicated branch only)
+        if: startsWith(github.ref_name, 'strict-baremetal/') || startsWith(github.head_ref, 'strict-baremetal/')
+        shell: pwsh
+        run: ./tools/scripts/smoke_baremetal.ps1 -FailOnStrictMissing
+
+      - name: Generate strict report (non-blocking)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          ./tools/scripts/smoke_baremetal.ps1 -Json > artifacts/baremetal_structure_report.json
+
+      - name: Render markdown report
+        shell: pwsh
+        run: ./tools/scripts/render_baremetal_report.ps1 -InputJson artifacts/baremetal_structure_report.json -OutputMarkdown artifacts/baremetal_structure_report.md
+
+      - name: Upload structure report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: baremetal-structure-report
+          path: |
+            artifacts/baremetal_structure_report.json
+            artifacts/baremetal_structure_report.md

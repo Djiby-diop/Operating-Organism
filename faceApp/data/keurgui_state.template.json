@@ -1,0 +1,61 @@
+{
+  "id_foyer": "keurgui-001",
+  "nom_foyer": "Keurgui Maison",
+  "langue": "fr",
+  "onboarding_profile": "general",
+  "voice_guide_enabled": false,
+  "guardian_mode_enabled": false,
+  "guardian_idle_threshold_minutes": 20,
+  "guardian_reminder_window_minutes": 30,
+  "guardian_last_interaction_at": "",
+  "guardian_last_alert": "",
+  "guardian_profile_preset_modes": {
+    "general": "balanced",
+    "enfant": "balanced",
+    "senior": "balanced",
+    "diaspora": "balanced"
+  },
+  "guardian_profile_thresholds": {
+    "general": {
+      "idle_threshold_minutes": 20,
+      "reminder_window_minutes": 30
+    },
+    "enfant": {
+      "idle_threshold_minutes": 10,
+      "reminder_window_minutes": 45
+    },
+    "senior": {
+      "idle_threshold_minutes": 15,
+      "reminder_window_minutes": 60
+    },
+    "diaspora": {
+      "idle_threshold_minutes": 30,
+      "reminder_window_minutes": 30
+    }
+  },
+  "fuseau": "Africa/Dakar",
+  "mode_foyer": "normal",
+  "first_life_completed": false,
+  "quickstart": {
+    "enabled": true,
+    "step": 1,
+    "steps_total": 4,
+    "completed": false,
+    "last_action": ""
+  },
+  "created_at": "2026-05-14T00:00:00Z",
+  "membres": [
+    { "id": "m1", "prenom": "Parent", "role": "admin" },
+    { "id": "m2", "prenom": "Enfant", "role": "member" }
+  ],
+  "routines": [
+    { "id": "r1", "nom": "Petit dej", "heure": "07:00", "actif": true },
+    { "id": "r2", "nom": "Devoirs", "heure": "18:00", "actif": true }
+  ],
+  "futures": [
+    "Keurgui Mesh",
+    "Keurgui Guardian",
+    "Memory Atlas",
+    "Ritual Engine"
+  ]
+}

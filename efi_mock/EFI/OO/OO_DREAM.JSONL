@@ -1,0 +1,3 @@
+{"prompt": "User: Scan the networks.", "completion": "I will perform a WiFi scan to discover available access points. [[ACTION: wifi_scan]]", "confidence": 0.95, "halt_prob": 0.01}
+{"prompt": "User: Save my current state.", "completion": "D'accord, je sauvegarde l'état actuel de l'organisme dans la mémoire persistante. [[ACTION: nfs_save]]", "confidence": 0.98, "halt_prob": 0.0}
+{"prompt": "User: Reboot the system.", "completion": "System update required. Initiating cold reset. [[ACTION: reboot]]", "confidence": 0.92, "halt_prob": 0.05}

@@ -1,0 +1,23 @@
+[Unit]
+Description=OO Colony Server (Distributed Organism Coordinator)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=oo
+Group=oo
+WorkingDirectory=/opt/oo/colony-server
+Environment=RUST_LOG=info
+Environment=COLONY_BIND=0.0.0.0:8080
+ExecStart=/opt/oo/colony-server/target/release/colony-server
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/oo/colony-server/fossil
+
+[Install]
+WantedBy=multi-user.target

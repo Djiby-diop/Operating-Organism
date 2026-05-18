@@ -1,0 +1,7 @@
+# llmk-autorun.txt (USB-BOOT-FILES)
+# This file can be copied to the boot volume root.
+# In llm-baremetal, it is also included in the boot image by create-boot-mtools.sh.
+
+/version
+/ctx
+/help

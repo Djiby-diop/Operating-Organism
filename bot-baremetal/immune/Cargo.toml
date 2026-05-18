@@ -1,0 +1,27 @@
+[package]
+name = "bot-immune"
+version = "0.1.0"
+edition = "2021"
+description = "Bot-Baremetal Immune System — Swarm Mind & Watchers"
+authors = ["Operating Organism Project"]
+
+[lib]
+name = "bot_immune"
+path = "src/lib.rs"
+
+[[bin]]
+name = "swarm_mind"
+path = "src/swarm_mind_main.rs"
+
+[dependencies]
+# Zéro dépendances externes pour la phase 1.
+# Le Bot doit survivre sans rien.
+
+[profile.release]
+opt-level = 3
+strip = true
+lto = true
+panic = "abort"    # Pas de stack unwinding — le Bot ne panique pas, il survit
+
+[profile.dev]
+opt-level = 1

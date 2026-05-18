@@ -1,0 +1,56 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Rust/Cargo
+**/target/
+
+# C/C++ build outputs
+**/build/
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.exe
+
+# Firmware/boot artifacts
+*.efi
+*.fd
+*.bin
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
+*.swp
+
+# QEMU and serial outputs
+qemu-*.txt
+qemu-*.log
+*-serial.log
+OO_UART*.log
+
+# Local/editor/system
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local worktree scratch folders
+*.worktrees/**/build/
+
+# Visual Studio cache/db files
+.vs/
+*.VC.db
+*.VC.db-shm
+*.VC.opendb
+
+# Large binary artifacts and worktree images
+llm-baremetal.worktrees/
+*.worktrees/
+swarm_temp/
+*.img
+*.iso
+ovmf-vars-temp.fd

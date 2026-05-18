@@ -1,0 +1,17 @@
+{
+  "boot_or_start_count": 5,
+  "continuity_epoch": 0,
+  "last_clean_shutdown": true,
+  "last_recovery_reason": null,
+  "last_started_at_epoch_s": 1777806883,
+  "mode": "normal",
+  "policy": {
+    "safe_first": true,
+    "deny_by_default": true,
+    "llm_advisory_only": true,
+    "enforcement": "observe"
+  },
+  "workers": [],
+  "goals": [],
+  "federation": []
+}
