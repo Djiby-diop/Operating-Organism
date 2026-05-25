@@ -1,0 +1,281 @@
+# Makefile.oo-build -- OO subsystem build validation
+# Usage (WSL from worktree root): make -f tools/build/Makefile.oo-build -j4
+ARCH = x86_64
+CC   = gcc
+AR   = ar
+OO_ROOT  ?= .
+SRC_ROOT ?= ../../llm-baremetal
+GUARD_DIR = $(OO_ROOT)/oo-warden/guard
+MULTIARCH := $(shell $(CC) -print-multiarch 2>/dev/null)
+EFI_LIBDIR_CANDS := /usr/lib /usr/lib/$(MULTIARCH)
+EFI_LDS := $(firstword $(wildcard $(addsuffix /elf_$(ARCH)_efi.lds,$(EFI_LIBDIR_CANDS))))
+EFI_INCLUDES = -I/usr/include/efi -I/usr/include/efi/$(ARCH)
+
+CFLAGS = \
+	-ffreestanding -fno-stack-protector -fpic -fshort-wchar -mno-red-zone \
+	$(EFI_INCLUDES) -DEFI_FUNCTION_WRAPPER -DUEFI_BUILD \
+-I$(SRC_ROOT)/engine/ssm -I$(SRC_ROOT)/engine/gguf -I$(SRC_ROOT)/engine/djiblas \
+-I$(SRC_ROOT)/core -I$(OO_ROOT) -I$(SRC_ROOT) \
+	-O2 -msse2 -DDJIBLAS_DISABLE_CPUID=1 \
+	-Wall -Wno-unused-parameter -Wno-unused-function
+
+# Phase 5 (best-effort): ensure metabion_profile.h exists for unity-includes.
+METABION_PROFILE_HDR = $(SRC_ROOT)/metabion_profile.h
+METABION_PROFILE_DEFAULT = $(SRC_ROOT)/metabion_profile_default.h
+
+$(METABION_PROFILE_HDR): $(METABION_PROFILE_DEFAULT)
+	@if [ -f "$@" ]; then :; else cp "$<" "$@"; echo "OK: using metabion_profile.h fallback (default)"; fi
+
+OO_BUILD = $(OO_ROOT)/build/oo
+
+OO_KERNEL_SRCS = \
+	$(OO_ROOT)/oo-kernel/hal/hw_dna.c \
+	$(OO_ROOT)/oo-kernel/hal/pmu.c \
+	$(OO_ROOT)/oo-kernel/hal/ui_overlay.c \
+	$(OO_ROOT)/oo-kernel/hal/ui_splash.c \
+	$(OO_ROOT)/oo-kernel/mem/heap.c \
+	$(OO_ROOT)/oo-kernel/boot/oo_boot.c \
+	$(OO_ROOT)/oo-kernel/boot/efi_entry.c \
+	$(OO_ROOT)/oo-kernel/boot/efi_phases.c \
+	$(OO_ROOT)/oo-kernel/boot/oo_globals.c \
+	$(OO_ROOT)/oo-kernel/boot/oo_weak_stubs.c \
+	$(OO_ROOT)/oo-kernel/repl/oo_repl.c \
+	$(OO_ROOT)/oo-kernel/repl/repl.c \
+	$(OO_ROOT)/oo-kernel/repl/repl_ctx.c
+
+OO_WARDEN_SRCS = \
+	$(OO_ROOT)/oo-warden/sentinel/pressure.c \
+	$(OO_ROOT)/oo-warden/dplus/dplus.c \
+	$(OO_ROOT)/oo-warden/recovery/orchestrator.c
+
+OO_ENGINE_SRCS = \
+	$(OO_ROOT)/oo-engine/kv_persist/kv_persist.c \
+	$(OO_ROOT)/oo-engine/blas/hebbian.c \
+	$(OO_ROOT)/oo-engine/splitbrain/splitbrain.c \
+	$(OO_ROOT)/oo-engine/journal_train/journal_train.c \
+	$(OO_ROOT)/dreamion-engine/core/dreamion.c \
+	$(OO_ROOT)/ghost-engine/core/ghost.c \
+	$(OO_ROOT)/morphion-engine/core/morphion.c \
+	$(OO_ROOT)/evolvion-engine/core/evolvion.c \
+	$(OO_ROOT)/evolvion-engine/core/stub_asm.c
+
+OO_MODULES_SRCS = \
+	$(OO_ROOT)/oo-modules/module_api.c \
+	$(OO_ROOT)/oo-modules/sensing/conscience/module_conscience.c \
+	$(OO_ROOT)/oo-modules/sensing/compatibilion/module_compatibilion.c \
+	$(OO_ROOT)/oo-modules/sensing/diagnostion/module_diagnostion.c \
+	$(OO_ROOT)/oo-modules/sensing/metabion/module_metabion.c \
+	$(OO_ROOT)/oo-modules/adaptation/calibrion/module_calibrion.c \
+	$(OO_ROOT)/oo-modules/adaptation/diopion/module_diopion.c \
+	$(OO_ROOT)/oo-modules/adaptation/morphion/module_morphion.c \
+	$(OO_ROOT)/oo-modules/adaptation/symbion/module_symbion.c \
+	$(OO_ROOT)/oo-modules/adaptation/evolvion/module_evolvion.c \
+	$(OO_ROOT)/oo-modules/memory/memorion/module_memorion.c \
+	$(OO_ROOT)/oo-modules/memory/synaption/module_synaption.c \
+	$(OO_ROOT)/oo-modules/memory/pheromion/module_pheromion.c \
+	$(OO_ROOT)/oo-modules/memory/dreamion/module_dreamion.c \
+	$(OO_ROOT)/oo-modules/memory/neuralfs/module_neuralfs.c \
+	$(OO_ROOT)/oo-modules/identity/djibion/module_djibion.c \
+	$(OO_ROOT)/oo-modules/identity/immunion/module_immunion.c \
+	$(OO_ROOT)/oo-modules/social/collectivion/module_collectivion.c \
+	$(OO_ROOT)/oo-modules/social/ghost/module_ghost.c \
+	$(OO_ROOT)/oo-modules/meta/orchestrion/module_orchestrion.c \
+	$(OO_ROOT)/oo-modules/meta/cellion/module_cellion.c \
+	$(OO_ROOT)/neuralfs-engine/core/neuralfs.c \
+	$(OO_ROOT)/collectivion-engine/core/collectivion.c \
+	$(OO_ROOT)/cellion-engine/core/cellion.c
+
+OO_BUS_SRCS = \
+	$(OO_ROOT)/oo-bus/hermes/oo_bus_router.c \
+	$(OO_ROOT)/oo-bus/hermes/oo_bus_init.c \
+	$(OO_ROOT)/oo-kernel/hal/cmd_dna.c \
+	$(OO_ROOT)/oo-warden/sentinel/cmd_pressure.c \
+	$(OO_ROOT)/oo-engine/splitbrain/cmd_splitbrain.c \
+	$(OO_ROOT)/oo-engine/blas/cmd_hebbian.c \
+	$(OO_ROOT)/oo-engine/kv_persist/cmd_kv_persist.c \
+	$(OO_ROOT)/oo-modules/memory/pheromion/cmd_pheromion.c \
+	$(OO_ROOT)/oo-modules/sensing/conscience/cmd_conscience.c \
+	$(OO_ROOT)/oo-modules/identity/immunion/cmd_immunion.c \
+	$(OO_ROOT)/oo-modules/adaptation/evolvion/cmd_evolvion.c \
+	$(OO_ROOT)/oo-modules/memory/neuralfs/cmd_neuralfs.c
+
+# Real implementations from SRC_ROOT (worktree stubs are empty)
+OO_SRC_ENGINE_SRCS = \
+	$(SRC_ROOT)/oo-modules/calibrion-engine/core/calibrion.c \
+	$(SRC_ROOT)/oo-modules/cellion-engine/core/cellion.c \
+	$(SRC_ROOT)/oo-modules/collectivion-engine/core/collectivion.c \
+	$(SRC_ROOT)/oo-modules/compatibilion-engine/core/compatibilion.c \
+	$(SRC_ROOT)/oo-modules/conscience-engine/core/conscience.c \
+	$(SRC_ROOT)/oo-modules/diagnostion-engine/core/diagnostion.c \
+	$(SRC_ROOT)/oo-modules/diopion-engine/core/diopion.c \
+	$(SRC_ROOT)/oo-modules/djibion-engine/core/djibion.c \
+	$(SRC_ROOT)/oo-modules/dreamion-engine/core/dreamion.c \
+	$(SRC_ROOT)/oo-modules/evolvion-engine/core/evolvion.c \
+	$(SRC_ROOT)/oo-modules/ghost-engine/core/ghost.c \
+	$(SRC_ROOT)/oo-modules/immunion-engine/core/immunion.c \
+	$(SRC_ROOT)/oo-modules/memorion-engine/core/memorion.c \
+	$(SRC_ROOT)/oo-modules/metabion-engine/core/metabion.c \
+	$(SRC_ROOT)/oo-modules/morphion-engine/core/morphion.c \
+	$(SRC_ROOT)/oo-modules/neuralfs-engine/core/neuralfs.c \
+	$(SRC_ROOT)/oo-modules/orchestrion-engine/core/orchestrion.c \
+	$(SRC_ROOT)/oo-modules/pheromion-engine/core/pheromion.c \
+	$(SRC_ROOT)/oo-modules/symbion-engine/core/symbion.c \
+	$(SRC_ROOT)/oo-modules/synaption-engine/core/synaption.c \
+	$(SRC_ROOT)/oo-modules/wasm-engine/core/oo_wasm.c \
+	$(SRC_ROOT)/engine/ssm/soma_cortex.c \
+	$(SRC_ROOT)/engine/ssm/soma_dna.c \
+	$(SRC_ROOT)/engine/ssm/soma_dna_persist.c \
+	$(SRC_ROOT)/engine/ssm/soma_dream.c \
+	$(SRC_ROOT)/engine/ssm/soma_dual.c \
+	$(SRC_ROOT)/engine/ssm/soma_export.c \
+	$(SRC_ROOT)/engine/ssm/soma_journal.c \
+	$(SRC_ROOT)/engine/ssm/soma_logic.c \
+	$(SRC_ROOT)/engine/ssm/soma_memory.c \
+	$(SRC_ROOT)/engine/ssm/soma_memory_persist.c \
+	$(SRC_ROOT)/engine/ssm/soma_meta.c \
+	$(SRC_ROOT)/engine/ssm/soma_reflex.c \
+	$(SRC_ROOT)/engine/ssm/soma_router.c \
+	$(SRC_ROOT)/engine/ssm/soma_session.c \
+	$(SRC_ROOT)/engine/ssm/soma_smb.c \
+	$(SRC_ROOT)/engine/ssm/soma_spec.c \
+	$(SRC_ROOT)/engine/ssm/soma_swarm.c \
+	$(SRC_ROOT)/engine/ssm/soma_swarm_net.c \
+	$(SRC_ROOT)/engine/ssm/soma_warden.c \
+	$(SRC_ROOT)/engine/ssm/oosi_infer.c \
+	$(SRC_ROOT)/engine/ssm/oosi_loader.c \
+	$(SRC_ROOT)/engine/ssm/oosi_v3_infer.c \
+	$(SRC_ROOT)/engine/ssm/oosi_v3_loader.c \
+	$(SRC_ROOT)/engine/djiblas/djiblas.c \
+	$(SRC_ROOT)/engine/gguf/gguf_loader.c \
+	$(SRC_ROOT)/core/llmk_oo.c \
+	$(SRC_ROOT)/core/llmk_oo_infer.c \
+	$(SRC_ROOT)/core/llmk_log.c \
+	$(SRC_ROOT)/core/llmk_sentinel.c \
+	$(SRC_ROOT)/core/llmk_zones.c \
+	$(SRC_ROOT)/core/llmk_stubs.c
+
+# attention_avx2.c needs -mavx2/-mfma (separate compile rule)
+OO_SRC_AVX2_SRCS = $(SRC_ROOT)/engine/ssm/attention_avx2.c
+
+OO_SRC_ENGINE_OBJS = $(patsubst $(SRC_ROOT)/%.c,$(OO_BUILD)/%.o,$(OO_SRC_ENGINE_SRCS))
+OO_SRC_AVX2_OBJS   = $(patsubst $(SRC_ROOT)/%.c,$(OO_BUILD)/%.o,$(OO_SRC_AVX2_SRCS))
+
+OO_KERNEL_OBJS  = $(patsubst $(OO_ROOT)/%.c,$(OO_BUILD)/%.o,$(OO_KERNEL_SRCS))
+OO_WARDEN_OBJS  = $(patsubst $(OO_ROOT)/%.c,$(OO_BUILD)/%.o,$(OO_WARDEN_SRCS))
+OO_ENGINE_OBJS  = $(patsubst $(OO_ROOT)/%.c,$(OO_BUILD)/%.o,$(OO_ENGINE_SRCS))
+OO_MODULES_OBJS = $(patsubst $(OO_ROOT)/%.c,$(OO_BUILD)/%.o,$(OO_MODULES_SRCS))
+OO_BUS_OBJS     = $(patsubst $(OO_ROOT)/%.c,$(OO_BUILD)/%.o,$(OO_BUS_SRCS))
+
+.PHONY: all clean
+
+all: $(OO_BUILD)/liboo-kernel.a $(OO_BUILD)/liboo-warden.a \
+	$(OO_BUILD)/liboo-engine.a $(OO_BUILD)/liboo-modules.a \
+	$(OO_BUILD)/liboo-bus.a $(OO_BUILD)/librust_guard.a
+	@echo 
+	@echo === OO BUILD COMPLETE ===
+	@ls -lh $(OO_BUILD)/*.a
+
+$(OO_BUILD)/liboo-kernel.a: $(OO_KERNEL_OBJS)
+	@mkdir -p $(dir $@)
+	$(AR) rcs $@ $^
+	@echo [AR] $@
+
+$(OO_BUILD)/liboo-warden.a: $(OO_WARDEN_OBJS)
+	@mkdir -p $(dir $@)
+	$(AR) rcs $@ $^
+	@echo [AR] $@
+
+$(OO_BUILD)/liboo-engine.a: $(OO_ENGINE_OBJS) $(OO_SRC_ENGINE_OBJS) $(OO_SRC_AVX2_OBJS)
+	@mkdir -p $(dir $@)
+	$(AR) rcs $@ $^
+	@echo [AR] $@
+
+$(OO_BUILD)/liboo-modules.a: $(OO_MODULES_OBJS)
+	@mkdir -p $(dir $@)
+	$(AR) rcs $@ $^
+	@echo [AR] $@
+
+$(OO_BUILD)/liboo-bus.a: $(OO_BUS_OBJS)
+	@mkdir -p $(dir $@)
+	$(AR) rcs $@ $^
+	@echo [AR] $@
+
+# Rust guard static library (no_std, C-ABI, panic=abort)
+$(OO_BUILD)/librust_guard.a: $(GUARD_DIR)/Cargo.toml $(GUARD_DIR)/libguard/src/ffi.rs
+	@mkdir -p $(OO_BUILD)
+	@echo "[CARGO] Building libguard..."
+	cd $(GUARD_DIR) && cargo build --release -p libguard 2>&1 | grep -v '^warning: profiles'
+	cp $(GUARD_DIR)/target/release/librust_guard.a $(OO_BUILD)/librust_guard.a
+	@echo [AR] $(OO_BUILD)/librust_guard.a
+
+$(OO_BUILD)/%.o: $(OO_ROOT)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Compile rules for SRC_ROOT real implementations
+$(OO_BUILD)/oo-modules/%.o: $(SRC_ROOT)/oo-modules/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(dir $<) -c $< -o $@
+
+$(OO_BUILD)/engine/ssm/attention_avx2.o: $(SRC_ROOT)/engine/ssm/attention_avx2.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -mavx2 -mfma -I$(SRC_ROOT)/engine/ssm -c $< -o $@
+
+$(OO_BUILD)/engine/ssm/%.o: $(SRC_ROOT)/engine/ssm/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(SRC_ROOT)/engine/ssm -I$(SRC_ROOT)/engine/ssm/core -c $< -o $@
+
+$(OO_BUILD)/engine/djiblas/%.o: $(SRC_ROOT)/engine/djiblas/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OO_BUILD)/engine/gguf/%.o: $(SRC_ROOT)/engine/gguf/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OO_BUILD)/oo-bus/%.o: $(SRC_ROOT)/oo-bus/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OO_BUILD)/core/%.o: $(SRC_ROOT)/core/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# efi_phases.c unity-includes llama2_efi_final.c — always rebuild (WSL/NTFS timestamps unreliable)
+.PHONY: oo_efi_phases_force
+$(OO_BUILD)/oo-kernel/boot/efi_phases.o: $(SRC_ROOT)/llama2_efi_final.c $(METABION_PROFILE_HDR) oo_efi_phases_force
+
+clean:
+	rm -rf $(OO_BUILD)
+	cd $(GUARD_DIR) && cargo clean
+
+
+
+
+# ============================================================
+# EFI Link Step -- produce KERNEL.EFI from all archives
+# ============================================================
+EFI_CRT0    := /usr/lib/crt0-efi-x86_64.o
+EFI_LIB_DIR := /usr/lib
+KERNEL_SO   := $(OO_BUILD)/kernel.so
+KERNEL_EFI  := $(OO_ROOT)/KERNEL.EFI
+
+EFI_LIBS    := -L$(EFI_LIB_DIR) -lefi -lgnuefi
+LDFLAGS_EFI := -nostdlib -shared -Wl,-Bsymbolic -T $(EFI_LDS) $(EFI_CRT0)
+
+.PHONY: efi inject-efi
+
+efi: $(KERNEL_EFI)
+
+$(KERNEL_EFI): $(KERNEL_SO)
+	@echo "[OBJCOPY] $@"
+	objcopy -j .text -j .sdata -j .data -j .dynamic -j .dynsym -j .rel -j .rela -j .rela.dyn -j .reloc --target=efi-app-x86_64 $(KERNEL_SO) $@
+	@ls -lh $@
+
+$(KERNEL_SO): $(OO_BUILD)/liboo-kernel.a $(OO_BUILD)/liboo-warden.a $(OO_BUILD)/liboo-engine.a $(OO_BUILD)/liboo-modules.a $(OO_BUILD)/liboo-bus.a $(OO_BUILD)/librust_guard.a
+	@mkdir -p $(dir $@)
+	@echo "[LINK] $@"
+	gcc $(LDFLAGS_EFI) -Wl,--whole-archive $(OO_BUILD)/liboo-kernel.a $(OO_BUILD)/liboo-warden.a $(OO_BUILD)/liboo-engine.a $(OO_BUILD)/liboo-modules.a $(OO_BUILD)/liboo-bus.a -Wl,--no-whole-archive $(OO_BUILD)/librust_guard.a $(EFI_LIBS) -o $@
+
+inject-efi: $(KERNEL_EFI)
+	@BOOT="$(OO_ROOT)/llm-baremetal-boot.img"; [ -f "$$BOOT" ] || BOOT="$(SRC_ROOT)/../llm-baremetal-boot.img"; if [ -f "$$BOOT" ]; then mcopy -oi "$$BOOT@@1048576" $< z:/KERNEL.EFI && echo "[INJECT] done"; else echo "[INJECT] no boot image"; fi
