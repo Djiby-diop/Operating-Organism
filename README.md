@@ -48,6 +48,17 @@ Runtime mode transitions follow: `NORMAL -> DEGRADED -> SAFE -> RECOVERY`.
 pwsh ./tools/scripts/smoke_baremetal.ps1 -FailOnMissing -FailOnStrictMissing
 ```
 
+## Pinned Toolchain
+
+This repository pins a Rust toolchain to ensure reproducible builds across
+contributors and CI. The pinned toolchain is defined in `rust-toolchain.toml`.
+Use `rustup` to respect the pinned version automatically when building:
+
+```powershell
+rustup show active-toolchain
+cargo build --locked
+```
+
 3. Run targeted project lanes from each module readme.
 
 ## Operator first 10 minutes

@@ -1,0 +1,7 @@
+[toolchain]
+channel = "1.70.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
+
+# Pinning the Rust toolchain ensures reproducible builds across contributors.
+# Update this file when upgrading the workspace compiler version.
