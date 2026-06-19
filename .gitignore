@@ -35,6 +35,8 @@ OO_UART*.log
 
 # Local/editor/system
 .vscode/
+.idea/
+.junie/
 .DS_Store
 Thumbs.db
 
@@ -60,4 +62,18 @@ colony-server/temp_node*/
 
 # Project images/media
 picture oo/
+Gemini_Generated_*.png
+
+# Python and notebook runtime noise
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Large local model/data artifacts
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.gguf
+*.mamb
+*.tar.gz
 

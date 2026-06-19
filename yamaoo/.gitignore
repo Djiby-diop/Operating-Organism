@@ -5,11 +5,19 @@ frontend/node_modules/
 frontend/dist/
 frontend/artifacts/
 modules/kernel_agent/target/
+app/node_modules/
+app/dist/
 
 # Local / editor
 .vscode/
+.idea/
 *.local
 .DS_Store
+.pytest_cache/
+__pycache__/
 
 # Misc local files
 Document sans titre.docx
+*.log
+*.tmp
+*.bak
