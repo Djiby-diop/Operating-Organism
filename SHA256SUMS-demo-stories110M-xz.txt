@@ -1,1 +1,0 @@
-6781e7a5bd8e501534521245e1ff4255d822abfd5d63b44e872dc2b7bc39d370  llm-baremetal-boot-demo-stories110M.img.xz

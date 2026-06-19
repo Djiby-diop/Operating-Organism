@@ -89,3 +89,37 @@ yamaoo/scripts/
 *.mamb
 *.tar.gz
 
+# Public repo hygiene: local assistant/editor and one-off helper files
+.cursorrules
+copilot-instructions.md
+*.code-workspace
+_check_*.sh
+_make_stubs.sh
+_oo_check.sh
+apply_signature.ps1
+update_image_ebs.sh
+run-oo-sim-lab.ps1
+run.ps1
+test-qemu.ps1
+**/test-qemu.ps1
+qemu_wsl_output.txt
+SHA256SUMS-demo-*.txt
+CODEBASE_STRUCTURE_ANALYSIS.md
+
+# Generated reports, runtime state, and boot staging
+artifacts/
+data/
+fossil/
+efi_mock/
+USB-BOOT-FILES/
+**/fat_dir/
+**/NvVars
+**/llmk-autorun.txt
+**/oo.cfg
+**/startup.nsh
+**/but.md
+
+# Debug symbols and local UI state
+*.pdb
+desktop_display/log.txt
+desktop_display/oo_voice_state.json
